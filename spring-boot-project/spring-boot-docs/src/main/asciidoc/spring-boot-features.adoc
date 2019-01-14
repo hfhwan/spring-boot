@@ -2866,11 +2866,12 @@ endpoints, as shown in the following example:
 	}
 ----
 
-WARNING: Jersey's support for scanning executable archives is rather limited. For
-example, it cannot scan for endpoints in a package found in `WEB-INF/classes` when
-running an executable war file. To avoid this limitation, the `packages` method should
-not be used, and endpoints should be registered individually by using the `register`
-method, as shown in the preceding example.
+WARNING: Jersey's support for scanning executable archives is rather limited. For example,
+it cannot scan for endpoints in a package found in a <<deployment.adoc#deployment-install,
+fully executable jar file>> or in `WEB-INF/classes` when running an executable war file.
+To avoid this limitation, the `packages` method should not be used, and endpoints should
+be registered individually by using the `register` method, as shown in the preceding
+example.
 
 For more advanced customizations, you can also register an arbitrary number of beans that
 implement `ResourceConfigCustomizer`.
@@ -5998,9 +5999,10 @@ following example:
 	spring.quartz.jdbc.initialize-schema=always
 ----
 
-NOTE: By default, the database is detected and initialized by using the standard scripts
-provided with the Quartz library. It is also possible to provide a custom script by
-setting the `spring.quartz.jdbc.schema` property.
+WARNING: By default, the database is detected and initialized by using the standard scripts
+provided with the Quartz library. These scripts drop existing tables, deleting all triggers
+on every restart. It is also possible to provide a custom script by setting the
+`spring.quartz.jdbc.schema` property.
 
 To have Quartz use a `DataSource` other than the application's main `DataSource`, declare
 a `DataSource` bean, annotating its `@Bean` method with `@QuartzDataSource`. Doing so
@@ -7155,8 +7157,8 @@ The specific beans that you want to test should be specified by using the `value
 [[boot-features-testing-spring-boot-applications-testing-autoconfigured-rest-docs]]
 ==== Auto-configured Spring REST Docs Tests
 You can use the `@AutoConfigureRestDocs` annotation to use {spring-rest-docs}[Spring REST
-Docs] in your tests with Mock MVC or REST Assured. It removes the need for the JUnit rule
-in Spring REST Docs.
+Docs] in your tests with Mock MVC, REST Assured, or WebTestClient. It removes the need for
+the JUnit rule in Spring REST Docs.
 
 `@AutoConfigureRestDocs` can be used to override the default output directory
 (`target/generated-snippets` if you are using Maven or `build/generated-snippets` if you
@@ -7604,12 +7606,41 @@ annotations include:
 
 [[boot-features-class-conditions]]
 ==== Class Conditions
-The `@ConditionalOnClass` and `@ConditionalOnMissingClass` annotations let configuration
-be included based on the presence or absence of specific classes. Due to the fact that
-annotation metadata is parsed by using http://asm.ow2.org/[ASM], you can use the `value`
-attribute to refer to the real class, even though that class might not actually appear on
-the running application classpath. You can also use the `name` attribute if you prefer to
-specify the class name by using a `String` value.
+The `@ConditionalOnClass` and `@ConditionalOnMissingClass` annotations let
+`@Configuration` classes be included based on the presence or absence of specific classes.
+Due to the fact that annotation metadata is parsed by using http://asm.ow2.org/[ASM], you
+can use the `value` attribute to refer to the real class, even though that class might not
+actually appear on the running application classpath. You can also use the `name`
+attribute if you prefer to specify the class name by using a `String` value.
+
+This mechanism does not apply the same way to `@Bean` methods where typically the return
+type is the target of the condition: before the condition on the method applies, the JVM
+will have loaded the class and potentially processed method references which will fail if
+the class is not present.
+
+To handle this scenario, a separate `@Configuration` class can be used to isolate the
+condition, as shown in the following example:
+
+[source,java,indent=0]
+----
+	@Configuration
+	// Some conditions
+	public class MyAutoConfiguration {
+
+		// Auto-configured beans
+
+		@Configuration
+		@ConditionalOnClass(EmbeddedAcmeService.class)
+		static class EmbeddedConfiguration {
+
+			@Bean
+			@ConditionalOnMissingBean
+			public EmbeddedAcmeService embeddedAcmeService() { ... }
+
+		}
+
+	}
+----
 
 [TIP]
 ====
